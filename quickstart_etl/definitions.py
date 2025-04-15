@@ -1,7 +1,8 @@
-from dagster import Definitions, load_assets_from_modules
-from quickstart_etl.assets import data_assets
+from dagster import Definitions
+
+from quickstart_etl.assets.copyADLSfiles import copyADLSfiles
+from quickstart_etl.assets.validate_csv_counts import validate_csv_counts
 
 defs = Definitions(
     assets=[copyADLSfiles, validate_csv_counts],
-    schedules=[daily_refresh_schedule],
 )
