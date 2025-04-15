@@ -6,7 +6,7 @@ from azure.storage.blob import BlobServiceClient
 
 CONNECTION_STRING = os.environ["ADLS_CON_STRING"]
 
-@asset(deps=["validate_csv_counts"])
+@asset(deps=["process_and_count_csvs"])
 def validate_csv_counts() -> None:
     container = "med01nc-test-data"
     folder_path = "data/dagster"
