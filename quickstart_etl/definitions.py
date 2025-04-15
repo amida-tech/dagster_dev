@@ -33,7 +33,6 @@ def my_asset():
 my_assets = with_source_code_references(
     [
         my_asset,
-        *load_assets_from_package_module(assets),
         *load_assets_from_package_module(data_assets),
     ]
 )
