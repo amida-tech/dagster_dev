@@ -4,10 +4,11 @@ from io import BytesIO
 from azure.storage.blob import BlobServiceClient
 from dagster import asset, AssetIn
 
+# Pull ADLS connection string from environment
 CONNECTION_STRING = os.environ["ADLS_CON_STRING"]
 
-@asset(deps=[AssetIn("copyADLSfiles")])
-def validate_csv_counts() -> None:
+@asset(deps=[AssetIn("process_and_count_csvs")])
+def validate_csv_counts() -> str:
     container = "med01nc-test-data"
     folder_path = "data/dagster"
     counts_file = f"{folder_path}/counts.txt"
@@ -24,16 +25,13 @@ def validate_csv_counts() -> None:
         expected_count = int(expected_count)
         blob_name = f"{folder_path}/{filename}"
 
-        # Read CSV again
-        blob = container_client.get_blob_client(blob_name)
+        # Download CSV and count rows
         stream = BytesIO()
-        blob.download_blob().readinto(stream)
+        container_client.get_blob_client(blob_name).download_blob().readinto(stream)
         stream.seek(0)
-
-        df = pd.read_csv(stream)
-        actual_count = len(df)
+        actual_count = len(pd.read_csv(stream))
 
         if actual_count != expected_count:
-            raise ValueError(f"Count mismatch for {filename}: expected {expected_count}, got {actual_count}")
+            raise ValueError(f"❌ Count mismatch for {filename}: expected {expected_count}, got {actual_count}")
 
-    print("✅ All counts match.")
+    return "✅ All counts match."
