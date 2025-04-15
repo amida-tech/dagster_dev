@@ -1,4 +1,4 @@
-from dagster import Definitions, load_assets_from_package_module
+from dagster import Definitions, load_assets_from_module
 from quickstart_etl.assets import data_assets
 
 defs = Definitions(
