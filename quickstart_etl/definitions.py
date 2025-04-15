@@ -12,7 +12,7 @@ from dagster import (
 )
 from dagster._core.definitions.metadata.source_code import AnchorBasedFilePathMapping
 
-from . import assets
+from . import assets, data_assets
 
 daily_refresh_schedule = ScheduleDefinition(
     job=define_asset_job(name="all_assets_job"), cron_schedule="0 0 * * *"
@@ -33,6 +33,7 @@ my_assets = with_source_code_references(
     [
         my_asset,
         *load_assets_from_package_module(assets),
+        *load_assets_from_package_module(data_assets),
     ]
 )
 
