@@ -83,8 +83,8 @@ def load_all_recipient_data():
         )
         FILE_FORMAT = parquet_format
         LOAD_MODE = FULL_INGEST;
-        
-        
+        """,
+        """
         -- COPY INTO for B_AUTH_REP_TB
         COPY INTO RAW.B_AUTH_REP_TB (
         ETL_DATA_SOURCE,
@@ -142,8 +142,8 @@ def load_all_recipient_data():
         )
         FILE_FORMAT = parquet_format
         LOAD_MODE = FULL_INGEST;
-        
-        
+        """,
+        """
         
         
         COPY INTO RAW.B_DETAIL_TB (
@@ -262,8 +262,8 @@ def load_all_recipient_data():
         )
         FILE_FORMAT = parquet_format
         LOAD_MODE = FULL_INGEST;
-        
-        
+        """,
+        """
         COPY INTO RAW.B_ELIG_SPN_TB (
         ETL_DATA_SOURCE,
         ETL_BATCH_ID,
@@ -386,7 +386,8 @@ def load_all_recipient_data():
         )
         FILE_FORMAT = parquet_format
         LOAD_MODE = FULL_INGEST;
-        
+        """,
+        """
         COPY INTO RAW.B_ENRL_TB (
         ETL_DATA_SOURCE,
         ETL_BATCH_ID,
@@ -453,8 +454,8 @@ def load_all_recipient_data():
         )
         FILE_FORMAT = parquet_format
         LOAD_MODE = FULL_INGEST;
-        
-        
+        """,
+        """
         COPY INTO RAW.B_LANG_TB (
         ETL_DATA_SOURCE,
         ETL_BATCH_ID,
@@ -485,7 +486,8 @@ def load_all_recipient_data():
         )
         FILE_FORMAT = parquet_format
         LOAD_MODE = FULL_INGEST;
-        
+        """,
+        """
         
         COPY INTO RAW.B_RACE_TB (
         ETL_DATA_SOURCE,
@@ -515,8 +517,8 @@ def load_all_recipient_data():
         )
         FILE_FORMAT = parquet_format
         LOAD_MODE = FULL_INGEST;
-        
-        
+        """,
+        """
         COPY INTO RAW.B_XREF_TB (
         ETL_DATA_SOURCE,
         ETL_BATCH_ID,
