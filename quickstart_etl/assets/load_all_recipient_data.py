@@ -2,6 +2,7 @@ import os
 from dagster import asset
 from snowflake.snowpark import Session
 from quickstart_etl.assets.convert_csv_to_parquet import convert_csv_to_parquet
+from io import BytesIO
 
 SNOWFLAKE_USR = os.environ["SNOWFLAKE_USER"]
 SNOWFLAKE_PWD = os.environ["SNOWFLAKE_PASSWORD"]
