@@ -1,7 +1,7 @@
 import os
 from dagster import asset
 from snowflake.snowpark import Session
-from quickstart_etl.assets.validate_csv_counts import process_and_count_csvs
+from quickstart_etl.assets.convert_csv_to_parquet import process_and_count_csvs
 
 @asset(deps=["process_and_count_csvs"])
 def load_all_recipient_data():
