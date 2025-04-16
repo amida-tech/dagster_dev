@@ -10,7 +10,8 @@ setup(
         "pandas",
         "matplotlib",
         "azure-storage-blob",
-        "pyarrow"
+        "pyarrow",
+        "snowflake"
     ],
     extras_require={"dev": ["dagster-webserver", "pytest"]},
 )
