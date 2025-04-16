@@ -7,6 +7,10 @@ from io import BytesIO
 SNOWFLAKE_USR = os.environ["SNOWFLAKE_USER"]
 SNOWFLAKE_PWD = os.environ["SNOWFLAKE_PASSWORD"]
 
+print("🔍 Snowflake User:", os.getenv("SNOWFLAKE_USER"))
+print("🔍 Snowflake Password Present:", "SNOWFLAKE_PASSWORD" in os.environ)
+
+
 @asset(deps=["convert_csv_to_parquet"])
 def load_all_recipient_data():
     session = Session.builder.configs({
