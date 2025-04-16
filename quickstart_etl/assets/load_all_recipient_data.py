@@ -3,12 +3,15 @@ from dagster import asset
 from snowflake.snowpark import Session
 from quickstart_etl.assets.convert_csv_to_parquet import convert_csv_to_parquet
 
+SNOWFLAKE_USR = os.environ["SNOWFLAKE_USER"]
+SNOWFLAKE_PWD = os.environ["SNOWFLAKE_PASSWORD"]
+
 @asset(deps=["convert_csv_to_parquet"])
 def load_all_recipient_data():
     session = Session.builder.configs({
         "account": "vba67968.east-us-2.azure",
-        "user": os.getenv("SNOWFLAKE_USER"),
-        "password": os.getenv("SNOWFLAKE_PASSWORD"),
+        "user": "SNOWFLAKE_USR",
+        "password": "SNOWFLAKE_PWD",
          "role": "ACCOUNTADMIN",
         "warehouse": "COMPUTE_WH",
         "database": "ADW_DEV",
