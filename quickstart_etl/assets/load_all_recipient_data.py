@@ -10,8 +10,8 @@ SNOWFLAKE_PWD = os.environ["SNOWFLAKE_PASSWORD"]
 def load_all_recipient_data():
     session = Session.builder.configs({
         "account": "vba67968.east-us-2.azure",
-        "user": "SNOWFLAKE_USR",
-        "password": "SNOWFLAKE_PWD",
+        "user": SNOWFLAKE_USR,
+        "password": SNOWFLAKE_PWD,
          "role": "ACCOUNTADMIN",
         "warehouse": "COMPUTE_WH",
         "database": "ADW_DEV",
