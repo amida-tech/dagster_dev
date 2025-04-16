@@ -3,6 +3,7 @@ import os
 import pandas as pd
 from io import BytesIO
 from azure.storage.blob import BlobServiceClient
+from quickstart_etl.assets.copyADLSfiles import process_and_count_csvs
 
 CONNECTION_STRING = os.environ["ADLS_CON_STRING"]
 
