@@ -1,8 +1,9 @@
 import os
 from dagster import asset
 from snowflake.snowpark import Session
+from quickstart_etl.assets.convert_csv_to_parquet import convert_csv_to_parquet
 
-@asset
+@asset(deps=[convert_csv_to_parquet])
 def load_all_recipient_data():
     session = Session.builder.configs({
         "account": "vba67968.east-us-2.azure",
