@@ -1,9 +1,9 @@
 import os
 from dagster import asset
 from snowflake.snowpark import Session
-from quickstart_etl.assets.convert_csv_to_parquet import convert_csv_to_parquet
+from quickstart_etl.assets.validate_csv_counts import process_and_count_csvs
 
-@asset(deps=["validate_csv_counts"])
+@asset(deps=["process_and_count_csvs"])
 def load_all_recipient_data():
     session = Session.builder.configs({
         "account": "vba67968.east-us-2.azure",
