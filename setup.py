@@ -11,7 +11,7 @@ setup(
         "matplotlib",
         "azure-storage-blob",
         "pyarrow",
-        "snowflake"
+        "snowflake-snowpark-python"
     ],
     extras_require={"dev": ["dagster-webserver", "pytest"]},
 )
