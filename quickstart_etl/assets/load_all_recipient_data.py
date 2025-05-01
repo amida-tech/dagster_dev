@@ -1,5 +1,5 @@
 import os
-from dagster import asset
+from dagster import asset, Output
 from snowflake.snowpark import Session
 from quickstart_etl.assets.convert_csv_to_parquet import convert_csv_to_parquet
 from io import BytesIO
@@ -7,8 +7,8 @@ from io import BytesIO
 SNOWFLAKE_USR = os.environ["SNOWFLAKE_USER"]
 SNOWFLAKE_PWD = os.environ["SNOWFLAKE_PASSWORD"]
 
-print("🔍 Snowflake User:", os.getenv("SNOWFLAKE_USER"))
-print("🔍 Snowflake Password Present:", "SNOWFLAKE_PASSWORD" in os.environ)
+print(" Snowflake User:", os.getenv("SNOWFLAKE_USER"))
+print(" Snowflake Password Present:", "SNOWFLAKE_PASSWORD" in os.environ)
 
 
 @asset(deps=["convert_csv_to_parquet"])
@@ -563,8 +563,16 @@ def load_all_recipient_data():
     for sql in sql_statements:
         try:
             session.sql(sql).collect()
-            print("✅ Executed COPY INTO successfully.")
+            print(" Executed COPY INTO successfully.")
         except Exception as e:
-            print(f"❌ Failed to execute COPY INTO: {e}")
+            print(f" Failed to execute COPY INTO: {e}")
 
     session.close()
+    return Output(
+        value=None,
+        metadata={
+            "asset_type": "Snowflake Table",
+            "tables_loaded": ["RAW.B_ADDR_TB", "RAW.B_AUTH_REP_TB"]
+            
+        }
+    )
