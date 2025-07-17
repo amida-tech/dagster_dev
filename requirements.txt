@@ -1,0 +1,19 @@
+# Python 3.10.18
+
+dagster
+dagster-cloud
+dagster-webserver
+dagster-azure
+dagster-snowflake
+dagster-pandas
+snowflake-snowpark-python
+cryptography
+python-dotenv
+pandas
+requests
+azure-storage-file-datalake
+azure-identity
+azure-storage-blob
+paramiko
+pyarrow
+openpyxl
