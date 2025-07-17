@@ -1,0 +1,4 @@
+locations:
+- code_source:
+    module_name: definitions
+  location_name: amida_demo
