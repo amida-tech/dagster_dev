@@ -141,7 +141,7 @@ jobs:
           context: .
           push: true
         #   tags: ${{ env.IMAGE_REGISTRY }}:${{ env.IMAGE_TAG }}-amida_demo
-          tags: ${{ env.IMAGE_REGISTRY }}/amida-demo:${{ env.IMAGE_TAG }}
+          tags: ${{ env.IMAGE_REGISTRY }}/amida-demo:${{ env.IMAGE_TAG }}-amida_demo
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
