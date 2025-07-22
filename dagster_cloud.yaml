@@ -3,11 +3,18 @@
 #     module_name: definitions
 #   location_name: amida_demo
 
+# locations:
+#   - location_name: amida_demo
+#     code_source:
+#       package_name: definitions
+#     build:
+#       directory: ./
+#       registry: devuse2adwdagsteracr001.azurecr.io/amida-demo
+
 locations:
-  - location_name: amida_demo
+  - location_name: amida_dlh_dagster_dev
     code_source:
-      package_name: definitions
+      module_name: definitions
     build:
       directory: ./
       registry: devuse2adwdagsteracr001.azurecr.io/amida-demo
-      # registry: ghcr.io/<org>/<image-name>
