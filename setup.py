@@ -1,7 +1,7 @@
 from setuptools import find_packages, setup
 
 setup(
-    name="dagster_demo",
+    name="daster",
     install_requires=[
         "dagster",
         "dagster-snowflake",
