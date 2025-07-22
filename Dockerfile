@@ -2,7 +2,7 @@
 # FROM scratch
 
 
-FROM python:3.8-slim
+FROM python:3.10-slim
 # Add any steps to install project system dependencies like java
 
 WORKDIR /opt/dagster/app
