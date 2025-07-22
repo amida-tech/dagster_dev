@@ -150,7 +150,7 @@ jobs:
         if: steps.prerun.outputs.result != 'skip'
         uses: dagster-io/dagster-cloud-action/actions/utils/dagster-cloud-cli@v0.1
         with:
-          command: "ci set-build-output --location-name=amida_demo --image-tag=$IMAGE_TAG-amida_demo"
+          command: "ci set-build-output --location-name=amida_dlh_dagster_dev --image-tag=$IMAGE_TAG-amida_dlh_dagster_dev"
 
       # Deploy all code locations in this build session to Dagster Cloud
       - name: Deploy to Dagster Cloud
