@@ -13,7 +13,7 @@ from reusable_components.dq.dq_schema_validator import validate_all_file_schemas
 from reusable_components.dq.dq_procedure import dq_rules_procedure
 
 
-def create_medicaid_pipeline(config: dict):
+def create_pipeline(config: dict):
     
     subject_area = config["subject_area"].lower()
     

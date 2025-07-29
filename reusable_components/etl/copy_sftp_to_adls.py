@@ -1,8 +1,8 @@
 import re
+import time
 from typing import List, Optional, Union
 from paramiko import SFTPClient
 from azure.storage.filedatalake import DataLakeServiceClient
-from azure.core.exceptions import AzureError
 from dagster import AssetExecutionContext, MaterializeResult, MetadataValue
 
 
@@ -23,11 +23,6 @@ def copy_files_sftp_to_adls(
     extension: Optional[Union[str, List[str]]] = None,
     file_formats: Optional[List[str]] = None,
 ) -> MaterializeResult:
-    """
-    Complete SFTP to ADLS copy logic: validation + copy + MaterializeResult.
-    Returns MaterializeResult ready for the asset to return.
-    """
-    
     # Extract monitoring results
     files_complete = file_monitor_result.get("complete", False)
     alert_was_sent = file_monitor_result.get("alert_sent", False)
@@ -41,7 +36,6 @@ def copy_files_sftp_to_adls(
     # Check if monitoring requirements are met
     if not files_complete or not alert_was_sent or found_count != expected_count:
         context.log.info("❌ Skipping copy - conditions not met")
-        
         return MaterializeResult(
             value={
                 "status": "failed", 
@@ -56,63 +50,101 @@ def copy_files_sftp_to_adls(
             }
         )
     
-    # Log file criteria
-    context.log.info(f"🔍 {pipeline_name} Copy Criteria:")
-    context.log.info(f"   - prefix: {prefix}")
-    context.log.info(f"   - suffix: {suffix}")
-    context.log.info(f"   - contains: {contains}")
-    context.log.info(f"   - not_contains: {not_contains}")
-    context.log.info(f"   - regex: {regex}")
-    context.log.info(f"   - extension: {extension}")
-    
     try:
-        # Perform the actual copy
-        copied = _copy_sftp_to_adls_internal(
-            context=context,
-            sftp_client=sftp_client,
-            adls_client=adls_client,
-            source_path=source_path,
-            destination_container=destination_container,
-            destination_path=destination_path,
-            prefix=prefix,
-            suffix=suffix,
-            contains=contains,
-            not_contains=not_contains,
-            regex=regex,
-            extension=extension,
-            file_formats=file_formats
-        )
+        # Configure SFTP for better reliability
+        sftp_client.get_channel().settimeout(600)  # 10 minutes timeout
+        sftp_client.get_channel().transport.set_keepalive(30)  # Keep connection
         
-        context.log.info(f"✅ {pipeline_name} copied {len(copied)} files to staging")
+        # Get file system client
+        dest_fs_client = adls_client.get_file_system_client(destination_container)
         
-        # Validate copy count
-        if len(copied) != expected_count:
-            context.log.warning(f"⚠️ Copy count mismatch: copied {len(copied)}, expected {expected_count}")
-            context.log.info("This might indicate files were already present or filtering criteria changed")
+        # List files
+        files_list = sftp_client.listdir_attr(source_path)
         
-        # Return successful MaterializeResult
+        # Filter and copy files
+        copied_files = []
+        total_start_time = time.time()
+        
+        for entry in files_list:
+            fname = entry.filename
+            file_size = entry.st_size if hasattr(entry, 'st_size') else 0
+            size_mb = file_size / (1024 * 1024)
+            
+            # Apply filters
+            if not _should_copy_file(fname, prefix, suffix, contains, not_contains, regex, extension, file_formats):
+                continue
+            
+            full_sftp_path = f"{source_path}/{fname}"
+            adls_path = f"{destination_path}/{fname}"
+            
+            # Check if file already exists
+            dest_file_client = dest_fs_client.get_file_client(adls_path)
+            if dest_file_client.exists():
+                context.log.warning(f"⚠️ File already exists: {fname}")
+                continue
+            
+            # Copy file with progress logging
+            context.log.info(f"🚀 Starting: {fname} ({size_mb:.1f} MB)")
+            file_start_time = time.time()
+            
+            try:
+                # Simple copy with progress updates
+                with sftp_client.open(full_sftp_path, 'rb') as sftp_file:
+                    if size_mb < 10:  # Small files - copy at once
+                        data = sftp_file.read()
+                        dest_file_client.upload_data(data, overwrite=True)
+                    else:  # Large files - copy in chunks
+                        _copy_large_file_with_progress(
+                            context, sftp_file, dest_file_client, fname, file_size, size_mb
+                        )
+                
+                file_end_time = time.time()
+                file_time = file_end_time - file_start_time
+                speed = size_mb / file_time if file_time > 0 else 0
+                
+                context.log.info(f"✅ Completed: {fname} ({size_mb:.1f} MB in {file_time:.1f}s - {speed:.1f} MB/s)")
+                copied_files.append(f"{destination_container}/{adls_path}")
+                
+            except Exception as e:
+                context.log.error(f"❌ Failed to copy {fname}: {str(e)}")
+                raise
+        
+        total_end_time = time.time()
+        total_time = total_end_time - total_start_time
+        total_size = sum(entry.st_size for entry in files_list 
+                        if hasattr(entry, 'st_size') and 
+                        _should_copy_file(entry.filename, prefix, suffix, contains, not_contains, regex, extension, file_formats)) / (1024 * 1024)
+        avg_speed = total_size / total_time if total_time > 0 else 0
+        
+        context.log.info(f"🎉 {pipeline_name} Copy Complete!")
+        context.log.info(f"   📁 Files: {len(copied_files)}")
+        context.log.info(f"   📦 Size: {total_size:.1f} MB")
+        context.log.info(f"   ⏱️ Time: {total_time:.1f} seconds")
+        context.log.info(f"   🚀 Speed: {avg_speed:.1f} MB/s")
+        
         return MaterializeResult(
             value={
                 "status": "completed",
-                "copied_files": copied,
-                "copy_count": len(copied),
+                "copied_files": copied_files,
+                "copy_count": len(copied_files),
                 "expected_count": expected_count,
-                "pipeline_name": pipeline_name
+                "pipeline_name": pipeline_name,
+                "total_size_mb": total_size,
+                "total_time_seconds": total_time,
+                "average_speed_mbps": avg_speed
             },
             metadata={
                 "status": MetadataValue.text("✅ SUCCESS"),
-                "files_copied": MetadataValue.int(len(copied)),
-                "expected_files": MetadataValue.int(expected_count),
-                "copy_efficiency": MetadataValue.text(f"{len(copied)}/{expected_count} files"),
-                "pipeline_name": MetadataValue.text(pipeline_name),
-                "destination": MetadataValue.text(f"{destination_container}/{destination_path}")
+                "files_copied": MetadataValue.int(len(copied_files)),
+                "total_size_mb": MetadataValue.float(total_size),
+                "total_time_seconds": MetadataValue.float(total_time),
+                "average_speed_mbps": MetadataValue.float(avg_speed),
+                "pipeline_name": MetadataValue.text(pipeline_name)
             }
         )
         
     except Exception as e:
-        context.log.error(f"❌ {pipeline_name} copy operation failed: {str(e)}")
-        
-        # Return failed MaterializeResult
+        context.log.error(f"❌ {pipeline_name} copy failed: {str(e)}")
         return MaterializeResult(
             value={
                 "status": "failed",
@@ -122,113 +154,80 @@ def copy_files_sftp_to_adls(
             },
             metadata={
                 "status": MetadataValue.text("❌ ERROR"),
-                "error": MetadataValue.text(str(e)[:200] + "..." if len(str(e)) > 200 else str(e)),
-                "pipeline_name": MetadataValue.text(pipeline_name),
-                "files_copied": MetadataValue.int(0)
+                "error": MetadataValue.text(str(e)[:200]),
+                "pipeline_name": MetadataValue.text(pipeline_name)
             }
         )
-        raise
 
 
-def _copy_sftp_to_adls_internal(
-    context: AssetExecutionContext,
-    sftp_client: SFTPClient,
-    adls_client: DataLakeServiceClient,
-    source_path: str,
-    destination_container: str,
-    destination_path: str,
-    prefix: Optional[Union[str, List[str]]] = None,
-    suffix: Optional[Union[str, List[str]]] = None,
-    contains: Optional[Union[str, List[str]]] = None,
-    not_contains: Optional[Union[str, List[str]]] = None,
-    regex: Optional[str] = None,
-    extension: Optional[Union[str, List[str]]] = None,
-    file_formats: Optional[List[str]] = None,
-) -> List[str]:
-    """
-    Internal function that does the actual SFTP to ADLS copy work.
-    Separated from the main function to keep the MaterializeResult logic clean.
-    """
-    dest_fs_client = adls_client.get_file_system_client(destination_container)
+def _copy_large_file_with_progress(context, sftp_file, dest_file_client, fname, file_size, size_mb):
+    """Copy large file in chunks with progress updates."""
+    chunk_size = 8 * 1024 * 1024  # 8MB chunks
+    total_copied = 0
+    last_log_time = time.time()
     
-    # List files using the existing SFTP session
-    try:
-        files_list = sftp_client.listdir_attr(source_path)
-    except Exception as e:
-        context.log.error(f"Failed to list SFTP directory {source_path}: {e}")
-        raise
+    # Create destination file
+    dest_file_client.create_file()
     
-    copied_files: List[str] = []
+    while total_copied < file_size:
+        chunk = sftp_file.read(chunk_size)
+        if not chunk:
+            break
+        
+        dest_file_client.append_data(chunk, offset=total_copied)
+        total_copied += len(chunk)
+        
+        # Log progress every 15 seconds
+        current_time = time.time()
+        if current_time - last_log_time > 15:
+            progress = (total_copied / file_size) * 100
+            copied_mb = total_copied / (1024 * 1024)
+            context.log.info(f"   📊 {fname}: {progress:.0f}% ({copied_mb:.1f}/{size_mb:.1f} MB)")
+            last_log_time = current_time
     
-    for entry in files_list:
-        fname = entry.filename
-        full_sftp_path = f"{source_path}/{fname}"
-        
-        # Apply all filters inline
-        should_copy = True
-        
-        # Check prefix criteria
-        if prefix and should_copy:
-            if isinstance(prefix, list):
-                should_copy = any(fname.startswith(p) for p in prefix)
-            else:
-                should_copy = fname.startswith(prefix)
-        
-        # Check suffix criteria
-        if suffix and should_copy:
-            if isinstance(suffix, list):
-                should_copy = any(fname.endswith(s) for s in suffix)
-            else:
-                should_copy = fname.endswith(suffix)
-        
-        # Check contains criteria
-        if contains and should_copy:
-            if isinstance(contains, list):
-                should_copy = any(c in fname for c in contains)
-            else:
-                should_copy = contains in fname
-        
-        # Check not_contains criteria
-        if not_contains and should_copy:
-            if isinstance(not_contains, list):
-                should_copy = not any(nc in fname for nc in not_contains)
-            else:
-                should_copy = not_contains not in fname
-        
-        # Check regex criteria
-        if regex and should_copy:
-            should_copy = bool(re.search(regex, fname))
-        
-        # Check extension criteria
-        if extension and should_copy:
-            if isinstance(extension, list):
-                should_copy = any(fname.endswith(ext) for ext in extension)
-            else:
-                should_copy = fname.endswith(extension)
-        
-        # Filter by file_formats (legacy parameter)
-        if file_formats and should_copy:
-            should_copy = any(fname.lower().endswith(ext.lower()) for ext in file_formats)
-        
-        if not should_copy:
-            continue
-        
-        # Prepare Destination ADLS path
-        adls_path = f"{destination_path}/{fname}"
-        dest_file_client = dest_fs_client.get_file_client(adls_path)
-        
-        if dest_file_client.exists():
-            raise Exception(f"Destination file '{destination_container}/{adls_path}' already exists.")
-        
-        # Copy file
-        try:
-            with sftp_client.open(full_sftp_path, 'rb') as f:
-                data = f.read()
-            dest_file_client.upload_data(data, overwrite=True)
-            context.log.info(f"✅ Copied '{full_sftp_path}' -> '{destination_container}/{adls_path}'")
-            copied_files.append(f"{destination_container}/{adls_path}")
-        except Exception as e:
-            context.log.error(f"❌ Failed to copy {fname}: {e}")
-            raise
+    # Flush the file
+    dest_file_client.flush_data(total_copied)
+
+
+def _should_copy_file(fname, prefix, suffix, contains, not_contains, regex, extension, file_formats):
+    """Simple file filtering logic."""
+    # Check prefix
+    if prefix:
+        prefixes = prefix if isinstance(prefix, list) else [prefix]
+        if not any(fname.startswith(p) for p in prefixes):
+            return False
     
-    return copied_files
+    # Check suffix
+    if suffix:
+        suffixes = suffix if isinstance(suffix, list) else [suffix]
+        if not any(fname.endswith(s) for s in suffixes):
+            return False
+    
+    # Check contains
+    if contains:
+        contains_list = contains if isinstance(contains, list) else [contains]
+        if not any(c in fname for c in contains_list):
+            return False
+    
+    # Check not_contains
+    if not_contains:
+        not_contains_list = not_contains if isinstance(not_contains, list) else [not_contains]
+        if any(nc in fname for nc in not_contains_list):
+            return False
+    
+    # Check regex
+    if regex and not re.search(regex, fname):
+        return False
+    
+    # Check extension
+    if extension:
+        extensions = extension if isinstance(extension, list) else [extension]
+        if not any(fname.endswith(ext) for ext in extensions):
+            return False
+    
+    # Check file_formats (legacy)
+    if file_formats:
+        if not any(fname.lower().endswith(ext.lower()) for ext in file_formats):
+            return False
+    
+    return True

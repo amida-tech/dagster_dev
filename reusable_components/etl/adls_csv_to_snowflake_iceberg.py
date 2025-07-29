@@ -197,7 +197,7 @@ def copy_all_csv_to_iceberg(
     1) List all CSV files in ADLS under container/folder that match the criteria
     2) For each file, strip off ".csv" to get table_name
     3) Issue COPY INTO db.schema.table_name FROM @stage_name/<path>
-       using MATCH_BY_COLUMN_NAME='CASE_SENSITIVE'
+       using MATCH_BY_COLUMN_NAME='CASE_INSENSITIVE'
     
     Returns the list of tables that were loaded.
     """

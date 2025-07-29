@@ -1,8 +1,8 @@
-from reusable_components.medicaid.pipeline import create_medicaid_pipeline
+from reusable_components.medicaid.pipeline import create_pipeline
 from pipeline_config import RECIPIENT_CONFIG
 
 # Create Recipient Pipeline
-recipient_pipeline_assets = create_medicaid_pipeline(RECIPIENT_CONFIG)
+recipient_pipeline_assets = create_pipeline(RECIPIENT_CONFIG)
 recipient_files_monitor_sensor = recipient_pipeline_assets["monitor_sensor"]
 
 # Recipient Assets

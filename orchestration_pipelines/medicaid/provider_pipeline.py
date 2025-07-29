@@ -1,8 +1,8 @@
-from reusable_components.medicaid.pipeline import create_medicaid_pipeline
+from reusable_components.medicaid.pipeline import create_pipeline
 from pipeline_config import PROVIDER_CONFIG
  
 # Create Provider Pipeline
-provider_pipeline_assets = create_medicaid_pipeline(PROVIDER_CONFIG)
+provider_pipeline_assets = create_pipeline(PROVIDER_CONFIG)
 provider_files_monitor_sensor = provider_pipeline_assets["monitor_sensor"]
 
 # Provider Assets
