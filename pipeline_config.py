@@ -83,3 +83,81 @@ PROVIDER_CONFIG = {
         "send_success_alerts": True
     }
 }
+
+# NPPES Pipeline Configuration  
+NPPES_CONFIG = {
+    **BASE_CONFIG,
+    "pipeline_name": "NPPES_PIPELINE",
+    "subject_area": "NPPES",
+    "asset_name": "nppes_files_monitor",
+    "source_type": "nppes",                    
+    "sftp_source_path": "/prod/mmis/nppes",
+    "file_criteria": {
+        "prefix": {"pattern": ["npidata_pfile"], "count": 1},
+        "suffix": {"pattern": None, "count": 0},
+        "contains": {"pattern": None, "count": 0},
+        "not_contains": {"pattern": None, "count": 0},
+        "regex": {"pattern": None, "count": 0},
+        "extension": {"pattern": [".csv"], "count": 1}
+    },
+    "RULE_GROUP": "RECIP_001",
+    "RULE_ID": None,
+    "REFRESH_SUMMARY": None,
+    "downstream_assets": [
+        "start_dq_audit_run_nppes",
+        "load_dq_transactions_nppes", 
+        "unzip_nppes_files_to_load",
+        "archive_nppes_files",
+        "dq_schema_check_nppes",
+        "load_csv_to_iceberg_nppes",
+        "execute_rules_asset_nppes"
+    ],
+    "stage_directory": "nppes/stage",
+    "load_directory": "nppes/load",  
+    "archive_directory": "nppes/archive",
+    "control_file": "", 
+    "group_name": "nppes_file_processing",
+    "alert_config": {
+        "program_name": "NPPES Processing",
+        "send_success_alerts": True
+    }
+}
+
+# NUCC Pipeline Configuration
+NUCC_CONFIG = {
+    **BASE_CONFIG,
+    "pipeline_name": "NUCC_PIPELINE",
+    "subject_area": "NUCC",
+    "asset_name": "nucc_files_monitor",
+    "source_type": "nucc",
+    
+    "file_criteria": {
+        "prefix": {"pattern": ["nucc_taxonomy"], "count": 1},
+        "suffix": {"pattern": None, "count": 0},
+        "contains": {"pattern": None, "count": 0},
+        "not_contains": {"pattern": None, "count": 0},
+        "regex": {"pattern": None, "count": 0},
+        "extension": {"pattern": [".csv"], "count": 1}
+    },
+    "RULE_GROUP": "RECIP_001",
+    "RULE_ID": None,
+    "REFRESH_SUMMARY": None,
+    "downstream_assets": [
+        "start_dq_audit_run_nucc",
+        "load_dq_transactions_nucc", 
+        "copy_nucc_files_to_load",
+        "archive_nucc_files",
+        "dq_schema_check_nucc",
+        "load_csv_to_iceberg_nucc",
+        "execute_rules_asset_nucc"
+    ],
+    "stage_directory": "nucc/stage",
+    "load_directory": "nucc/load",  
+    "archive_directory": "nucc/archive",
+    "control_file": "", 
+    "group_name": "nucc_processing",
+    "alert_config": {
+        "program_name": "NUCC Data Processing",
+        "send_success_alerts": True
+    }
+}
