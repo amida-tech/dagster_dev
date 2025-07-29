@@ -14,6 +14,7 @@ PIPELINE_MODULES = [
     recipient_pipeline,
     provider_pipeline,
     nppes_pipeline,
+    nucc_pipeline
 ]
 
 all_assets = load_assets_from_modules(PIPELINE_MODULES)

@@ -19,6 +19,7 @@ setup(
         "dagster-azure",
         "pyarrow",
         "paramiko",
+        "bs4",
     ],
     extras_require={"dev": ["dagster-webserver", "pytest"]},
     packages=find_packages(),
