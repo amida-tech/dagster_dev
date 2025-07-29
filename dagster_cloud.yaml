@@ -17,4 +17,4 @@ locations:
       module_name: definitions
     build:
       directory: ./
-      registry: devuse2adwdagsteracr001.azurecr.io/amida-demo
+      registry: devuse2adwdagster002.azurecr.io/amida-demo
