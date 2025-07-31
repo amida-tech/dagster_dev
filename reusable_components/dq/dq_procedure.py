@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from dagster import AssetExecutionContext, Failure
 from snowflake.snowpark import Session
+from reusable_components.error_handling.standardized_alerts import send_pipeline_alert
 
 
 def dq_rules_procedure(
@@ -12,6 +13,8 @@ def dq_rules_procedure(
     audit_batch_id: str,
     rule_id: Optional[str] = None,
     refresh_summary: Optional[str] = None,
+    pipeline_name: Optional[str] = None,
+    alert_config: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     1) Logs inputs
@@ -20,6 +23,10 @@ def dq_rules_procedure(
     4) Parses & logs JSON
     5) Applies status_code logic with proper log levels and raises on critical
     6) Fetches the DQ_RUN_LOG rows for this batch and returns everything
+    7) Sends Logic Apps alerts based on severity levels:
+       - SEV 0: Fail asset + send high severity alert to oncall
+       - SEV 1: Continue + send alert to oncall + regular alert
+       - SEV 2/3: Continue + send regular alert only
     """
 
     audit_sql = f"""
@@ -119,28 +126,183 @@ def dq_rules_procedure(
     for k, v in run_log.items():
         context.log.info(f"{k:25} : {v!r}")
 
-    # Severity logic
+    # Enhanced severity logic with Logic Apps alerts
+    pipeline_name = pipeline_name or "DQ_PROCEDURE"
+    
+    # Check syntax errors first
     if run_log["N_FAILED_SYNTAX_COUNT"] > 0:
-        raise Failure(f"Stopped: {run_log['N_FAILED_SYNTAX_COUNT']} syntax error(s)")
+        syntax_error_msg = f"DQ Procedure failed: {run_log['N_FAILED_SYNTAX_COUNT']} syntax error(s)"
+        context.log.error(f"[SYNTAX ERROR] {syntax_error_msg}")
+        
+        # Send high severity alert to oncall for syntax errors
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="error",
+            message=syntax_error_msg,
+            error_details=f"Syntax errors detected in DQ procedure. Rule group: {rule_group}, Batch ID: {audit_batch_id}",
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "HIGH",
+                "alert_type": "oncall",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "syntax_errors": run_log["N_FAILED_SYNTAX_COUNT"]
+            }
+        )
+        
+        raise Failure(syntax_error_msg)
 
+    # Check SEV 0 failures (asset fails + oncall alert + regular alert)
     if run_log["N_FAILED_SEVERITY_0"] > 0:
-        raise Failure(f"Stopped: {run_log['N_FAILED_SEVERITY_0']} SEV_0 failure(s)")
+        sev0_error_msg = f"DQ Procedure failed: {run_log['N_FAILED_SEVERITY_0']} SEV_0 failure(s)"
+        context.log.error(f"[SEV_0 FAILURE] {sev0_error_msg}")
+        
+        # Send high severity alert to oncall for SEV 0
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="error",
+            message=sev0_error_msg,
+            error_details=f"Critical SEV_0 failures detected. Rule group: {rule_group}, Batch ID: {audit_batch_id}",
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "HIGH",
+                "alert_type": "oncall",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "sev0_failures": run_log["N_FAILED_SEVERITY_0"]
+            }
+        )
+        
+        # Also send regular alert for SEV 0
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="error",
+            message=sev0_error_msg,
+            error_details=f"Critical SEV_0 failures detected. Rule group: {rule_group}, Batch ID: {audit_batch_id}",
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "HIGH",
+                "alert_type": "regular",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "sev0_failures": run_log["N_FAILED_SEVERITY_0"]
+            }
+        )
+        
+        raise Failure(sev0_error_msg)
 
+    # Check SEV 1 failures (asset continues + oncall alert + regular alert)
     if run_log["N_FAILED_SEVERITY_1"] > 0:
-        context.log.warning(
-            f"Notify on‑call: {run_log['N_FAILED_SEVERITY_1']} SEV_1 failure(s)"
+        sev1_warning_msg = f"DQ Procedure warning: {run_log['N_FAILED_SEVERITY_1']} SEV_1 failure(s)"
+        context.log.warning(f"[SEV_1 WARNING] {sev1_warning_msg}")
+        
+        # Send alert to oncall for SEV 1
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="error",
+            message=sev1_warning_msg,
+            error_details=f"SEV_1 failures detected but pipeline continues. Rule group: {rule_group}, Batch ID: {audit_batch_id}",
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "MEDIUM",
+                "alert_type": "oncall",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "sev1_failures": run_log["N_FAILED_SEVERITY_1"]
+            }
+        )
+        
+        # Also send regular alert for SEV 1
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="log",
+            message=sev1_warning_msg,
+            error_details=f"SEV_1 failures detected. Rule group: {rule_group}, Batch ID: {audit_batch_id}",
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "MEDIUM",
+                "alert_type": "regular",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "sev1_failures": run_log["N_FAILED_SEVERITY_1"]
+            }
         )
 
+    # Check SEV 2 failures (asset continues + regular alert only)
     if run_log["N_FAILED_SEVERITY_2"] > 0:
-        context.log.info(
-            f"{run_log['N_FAILED_SEVERITY_2']} SEV_2 failure(s) present"
+        sev2_info_msg = f"DQ Procedure info: {run_log['N_FAILED_SEVERITY_2']} SEV_2 failure(s)"
+        context.log.info(f"[SEV_2 INFO] {sev2_info_msg}")
+        
+        # Send regular alert for SEV 2
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="log",
+            message=sev2_info_msg,
+            error_details=f"SEV_2 failures detected. Rule group: {rule_group}, Batch ID: {audit_batch_id}",
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "LOW",
+                "alert_type": "regular",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "sev2_failures": run_log["N_FAILED_SEVERITY_2"]
+            }
         )
 
+    # Check SEV 3 failures (asset continues + regular alert only)
     if run_log["N_FAILED_SEVERITY_3"] > 0:
-        context.log.info(
-            f"{run_log['N_FAILED_SEVERITY_3']} SEV_3 failure(s) present"
+        sev3_info_msg = f"DQ Procedure info: {run_log['N_FAILED_SEVERITY_3']} SEV_3 failure(s)"
+        context.log.info(f"[SEV_3 INFO] {sev3_info_msg}")
+        
+        # Send regular alert for SEV 3
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="log",
+            message=sev3_info_msg,
+            error_details=f"SEV_3 failures detected. Rule group: {rule_group}, Batch ID: {audit_batch_id}",
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "LOW",
+                "alert_type": "regular",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "sev3_failures": run_log["N_FAILED_SEVERITY_3"]
+            }
         )
 
+    # Send success alert if no critical failures
+    if (run_log["N_FAILED_SEVERITY_0"] == 0 and 
+        run_log["N_FAILED_SYNTAX_COUNT"] == 0):
+        
+        success_msg = f"DQ Procedure completed successfully. Rule group: {rule_group}"
+        context.log.info(f"[SUCCESS] {success_msg}")
+        
+        # Send success alert
+        send_pipeline_alert(
+            context=context,
+            pipeline_name=pipeline_name,
+            trigger_type="info",
+            message=success_msg,
+            alert_config=alert_config,
+            additional_metadata={
+                "severity": "INFO",
+                "alert_type": "regular",
+                "rule_group": rule_group,
+                "batch_id": audit_batch_id,
+                "total_failures": (
+                    run_log["N_FAILED_SEVERITY_1"] + 
+                    run_log["N_FAILED_SEVERITY_2"] + 
+                    run_log["N_FAILED_SEVERITY_3"]
+                )
+            }
+        )
 
     return {
         "procedure_output": output,

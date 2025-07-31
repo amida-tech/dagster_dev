@@ -15,6 +15,9 @@ DEFAULT_ALERT_CONFIGS = {
         "recipients": {
             "email": ["greeshmanjali@amida.com"]
         },
+        "oncall_recipients": {
+            "email": ["prashanth.manji@amida.com"] 
+        },
         "send_success_alerts": True
     },
     "MEDICAID_PROVIDER": {
@@ -24,6 +27,9 @@ DEFAULT_ALERT_CONFIGS = {
         "program_name": "Medicaid Provider Processing",
         "recipients": {
             "email": ["greeshmanjali@amida.com"]
+        },
+        "oncall_recipients": {
+            "email": ["prashanth.manji@amida.com"] 
         },
         "send_success_alerts": True
     },
@@ -35,6 +41,35 @@ DEFAULT_ALERT_CONFIGS = {
         "recipients": {
             "email": ["greeshmanjali@amida.com"]
         },
+        "oncall_recipients": {
+            "email": ["prashanth.manji@amida.com"] 
+        },
+        "send_success_alerts": True
+    },
+    "NPPES_PIPELINE": {
+        "logic_app_url": "https://prod-47.eastus2.logic.azure.com:443/workflows/09f114d3198a487db73ec504e0277148/triggers/Receive_Medicaid_Alert_Request/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FReceive_Medicaid_Alert_Request%2Frun&sv=1.0&sig=QdaGnWj1_gZp0nzZZCWzkgn-1nj_r9LGG-al5f1NPrE",
+        "environment": "Development",
+        "application_name": "Dagster - NPPES Processing",
+        "program_name": "NPPES Data Processing",
+        "recipients": {
+            "email": ["greeshmanjali@amida.com"]
+        },
+        "oncall_recipients": {
+            "email": ["prashanth.manji@amida.com"] 
+        },
+        "send_success_alerts": True
+    },
+    "NUCC_PIPELINE": {
+        "logic_app_url": "https://prod-47.eastus2.logic.azure.com:443/workflows/09f114d3198a487db73ec504e0277148/triggers/Receive_Medicaid_Alert_Request/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FReceive_Medicaid_Alert_Request%2Frun&sv=1.0&sig=QdaGnWj1_gZp0nzZZCWzkgn-1nj_r9LGG-al5f1NPrE",
+        "environment": "Development",
+        "application_name": "Dagster - NUCC Processing",
+        "program_name": "NUCC Data Processing",
+        "recipients": {
+            "email": ["greeshmanjali@amida.com"]
+        },
+        "oncall_recipients": {
+            "email": ["prashanth.manji@amida.com"]  
+        },
         "send_success_alerts": True
     },
     "DEFAULT": {
@@ -44,6 +79,9 @@ DEFAULT_ALERT_CONFIGS = {
         "program_name": "Data Processing Pipeline",
         "recipients": {
             "email": ["greeshmanjali@amida.com"]
+        },
+        "oncall_recipients": {
+            "email": ["prashanth.manji@amida.com"] 
         },
         "send_success_alerts": True
     }
@@ -114,6 +152,18 @@ def send_pipeline_alert(
     else:
         asset_name = "unknown_asset"
     
+    # Determine recipients based on alert type and metadata
+    recipients = config.get("recipients", {"email": ["greeshmanjali@amida.com"]})
+    
+    # Check if this is an oncall alert based on additional_metadata
+    if additional_metadata and additional_metadata.get("alert_type") == "oncall":
+        oncall_recipients = config.get("oncall_recipients")
+        if oncall_recipients:
+            recipients = oncall_recipients
+            logger.info(f"📞 Routing alert to oncall recipients: {recipients}")
+        else:
+            logger.warning("⚠️ Oncall alert requested but no oncall_recipients configured")
+    
     # Build alert payload
     alert_payload = {
         "triggerType": trigger_type,
@@ -127,7 +177,7 @@ def send_pipeline_alert(
         "runID": context.run_id,
         "severity": severity_mapping.get(trigger_type, "Informational"),
         "AlertTimestamp": datetime.utcnow().isoformat() + "Z",
-        "recipients": config.get("recipients", {"email": ["greeshmanjali@amida.com"]}),
+        "recipients": recipients,
         "pipeline_metadata": {
             "pipeline_name": pipeline_name,
             "asset_name": asset_name,

@@ -5,6 +5,8 @@ from reusable_components.dq.dq_transactions import load_dq_transactions_with_res
 from reusable_components.etl.adls_csv_to_snowflake_iceberg import load_csv_to_iceberg_with_result
 from reusable_components.dq.dq_schema_validator import validate_all_file_schemas_with_result
 from reusable_components.dq.dq_procedure import dq_rules_procedure
+from reusable_components.etl.cleanup_files import cleanup_pipeline_directories
+from pipeline_config import RECIPIENT_CONFIG, PROVIDER_CONFIG, NPPES_CONFIG, NUCC_CONFIG
 import os
 import re
 import time
@@ -325,7 +327,7 @@ def create_nppes_pipeline(config: dict):
     # Rules Asset
     @asset(
         name=f"execute_rules_asset_{subject_area}",
-        required_resource_keys={"snowflake_snowpark"},
+        required_resource_keys={"snowflake_snowpark", "adls_access_keys"},
         ins={
             "audit_batch_id": AssetIn(f"start_dq_audit_run_{subject_area}"),
             "iceberg_result": AssetIn(f"load_csv_to_iceberg_{subject_area}")},
@@ -340,6 +342,7 @@ def create_nppes_pipeline(config: dict):
         Invokes the reusable dq_rules_procedure and returns:
         - procedure_output: the JSON dict from the proc
         - dq_run_log: list of log‑row dicts for this batch
+        After successful DQ procedure, cleans up stage and load directories.
         """
         dq_result = dq_rules_procedure(
             context=context,
@@ -347,8 +350,38 @@ def create_nppes_pipeline(config: dict):
             session=context.resources.snowflake_snowpark,
             rule_group=config.get("RULE_GROUP"),      
             rule_id=config.get("RULE_ID"),           
-            refresh_summary=config.get("REFRESH_SUMMARY")
+            refresh_summary=config.get("REFRESH_SUMMARY"),
+            pipeline_name=config.get("pipeline_name"),
+            alert_config=config.get("alert_config")
         )
+        
+        # After successful DQ procedure, clean up all pipeline directories
+        try:
+            context.log.info("🧹 Starting cleanup after successful DQ procedure...")
+            
+            # Define directories to clean for all pipelines
+            directories_to_clean = [
+                {
+                    "pipeline_name": "NPPES",
+                    "stage_directory": NPPES_CONFIG["stage_directory"],
+                    "load_directory": NPPES_CONFIG["load_directory"]
+                }
+            ]
+            
+            # Clean up all directories
+            cleanup_result = cleanup_pipeline_directories(
+                context=context,
+                adls_client=context.resources.adls_access_keys,
+                container_name="srcfiles",
+                directories_to_clean=directories_to_clean
+            )
+            
+            context.log.info(f"✅ Cleanup completed successfully: {cleanup_result}")
+            
+        except Exception as e:
+            context.log.error(f"❌ Cleanup failed: {str(e)}")
+            # Don't fail the asset if cleanup fails, just log the error
+        
         return dq_result
     
     return {
