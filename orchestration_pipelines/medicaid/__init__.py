@@ -1,7 +1,4 @@
-
-# orchestration_pipelines/medicaid/__init__.py
-from . import claims_pipeline
-from . import snowflaketables
+from . import provider_pipeline
 from . import recipient_pipeline
 
-__all__ = ["claims_pipeline","snowflaketables","recipient_pipeline"]
+__all__ = ["provider_pipeline","recipient_pipeline"]

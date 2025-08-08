@@ -1,0 +1,37 @@
+INSERT INTO {silver_db}.{silver_schema}.{silver_table} (
+    META_PROGRAM_NAME,
+    META_SUBJECT_AREA, 
+    META_BATCH_ID,
+    META_DATE_INSERT,
+    META_DATE_UPDATE,
+    META_UPD_BATCH_ID,
+    CODE,
+    GROUPING,
+    CLASSIFICATION,
+    SPECIALIZATION,
+    DEFINITION,
+    NOTES,
+    DISPLAY_NAME,
+    SECTION
+)
+SELECT 
+    '{program_name}' AS META_PROGRAM_NAME,
+    '{subject_area}' AS META_SUBJECT_AREA,
+    '{audit_batch_id}' AS META_BATCH_ID,
+    CURRENT_TIMESTAMP() AS META_DATE_INSERT,
+    NULL AS META_DATE_UPDATE,
+    NULL AS META_UPD_BATCH_ID,
+    CODE, 
+    GROUPING,
+    CLASSIFICATION,
+    SPECIALIZATION,
+    DEFINITION,
+    NOTES,
+    CASE 
+        WHEN DISPLAY_NAME IS NULL OR TRIM(DISPLAY_NAME) = '' THEN 'DESCRIPTION NOT AVAILABLE'
+        ELSE DISPLAY_NAME
+    END AS DISPLAY_NAME,
+    SECTION
+
+FROM {bronze_db}.{bronze_schema}.{bronze_table}
+WHERE META_BATCH_ID = '{audit_batch_id}';

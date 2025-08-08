@@ -13,13 +13,13 @@ def load_dq_transactions_with_result(
     context: AssetExecutionContext,
     snowpark_session: Session,
     adls_client: ADLS2Resource,
-    copy_result: dict,
     audit_batch_id: int,
     container_name: str,
     directory_path: str,
     program_name: str,
     subject_area: str,
     pipeline_name: str,
+    copy_result: Optional[dict] = None,
     prefix: Optional[Union[str, List[str]]] = None,
     suffix: Optional[Union[str, List[str]]] = None,
     contains: Optional[Union[str, List[str]]] = None,
@@ -32,21 +32,25 @@ def load_dq_transactions_with_result(
     Returns MaterializeResult ready for the asset to return.
     """
     
-    # Check if copy was successful
-    copy_status = copy_result.get("status", "unknown")
-    
-    if copy_status != "completed":
-        context.log.info(f"❌ Skipping {pipeline_name} DQ transactions - copy status: {copy_status}")
-        
-        return MaterializeResult(
-            value=[],
-            metadata={
-                "status": MetadataValue.text("⏭️ SKIPPED"),
-                "reason": MetadataValue.text(f"Copy operation status: {copy_status}"),
-                "pipeline_name": MetadataValue.text(pipeline_name),
-                "batch_id": MetadataValue.int(audit_batch_id)
-            }
-        )
+    if copy_result is not None:
+            copy_status = copy_result.get("status", "unknown")
+            
+            if copy_status != "completed":
+                context.log.info(f"❌ Skipping {pipeline_name} DQ transactions - copy status: {copy_status}")
+                
+                return MaterializeResult(
+                    value=[],
+                    metadata={
+                        "status": MetadataValue.text("⏭️ SKIPPED"),
+                        "reason": MetadataValue.text(f"Copy operation status: {copy_status}"),
+                        "pipeline_name": MetadataValue.text(pipeline_name),
+                        "batch_id": MetadataValue.int(audit_batch_id)
+                    }
+                )
+            else:
+                context.log.info(f"✅ {pipeline_name} copy validation passed - proceeding with DQ transactions")
+    else:
+        context.log.info(f"📊 {pipeline_name} - No copy validation needed, proceeding with DQ transactions")
     
     context.log.info(f"📊 {pipeline_name} loading DQ transactions for batch {audit_batch_id}")
     

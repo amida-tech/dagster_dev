@@ -42,7 +42,7 @@ def create_standardized_file_monitor(pipeline_config: Dict[str, Any]) -> Tuple[c
     alert_config = pipeline_config.get("alert_config", {})
     
     # Calculate total expected files
-    total_expected = _calculate_expected_file_count(file_criteria)
+    total_expected = calculate_expected_file_count(file_criteria)
     
     # ==========================================
     # PART 1: CREATE THE MONITORING ASSET
@@ -220,7 +220,7 @@ def create_standardized_file_monitor(pipeline_config: Dict[str, Any]) -> Tuple[c
         
         try:
             # Get current file count
-            current_file_count = _get_current_file_count_with_criteria(context, directory_path, file_criteria)
+            current_file_count = get_current_file_count_with_criteria(context, directory_path, file_criteria)
             if current_file_count is None:
                 return SkipReason(f"{pipeline_name}: Could not connect to SFTP")
             
@@ -272,7 +272,7 @@ def create_standardized_file_monitor(pipeline_config: Dict[str, Any]) -> Tuple[c
 # HELPER FUNCTIONS
 # ==========================================
 
-def _calculate_expected_file_count(file_criteria: Dict[str, Any]) -> int:
+def calculate_expected_file_count(file_criteria: Dict[str, Any]) -> int:
     """Calculate total expected files from criteria"""
     total_expected = 0
     for criteria_type, criteria_config in file_criteria.items():
@@ -576,7 +576,7 @@ def _save_memory_file(memory_file, matched_files, alert_sent, total_count):
         json.dump(new_memory, f)
 
 
-def _get_current_file_count_with_criteria(context, directory_path, file_criteria):
+def get_current_file_count_with_criteria(context, directory_path, file_criteria):
     """Quick SFTP connection to get current file count"""
     try:
         host = os.getenv("SFTP_HOST")

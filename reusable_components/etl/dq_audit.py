@@ -1,10 +1,34 @@
 from snowflake.snowpark import Session
 from dagster import AssetExecutionContext, MaterializeResult, MetadataValue
 from datetime import datetime, timezone
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict, Any
 
 DQ_AUDIT_TABLE = "ANALYTYXONE_DEV.DATALOOM.DQ_AUDIT"
 UPDATED_BY = "ETL"
+
+def standardize_monitor_result(monitor_result: Dict[str, Any]) -> Dict[str, Any]:
+
+    if all(key in monitor_result for key in ["complete", "found_total", "expected_total"]):
+        return monitor_result
+    
+    # NPPES format - convert it
+    elif "status" in monitor_result and "file_ready" in monitor_result:
+        if monitor_result.get("status") == "success" and monitor_result.get("file_ready"):
+            return {
+                "complete": True,
+                "found_total": len(monitor_result.get("extracted_files", [])),
+                "expected_total": 1
+            }
+        else:
+            return {
+                "complete": False,
+                "found_total": 0,
+                "expected_total": 1
+            }
+    
+    # Fallback - return as-is
+    else:
+        return monitor_result
 
 def create_dq_audit_entry(
     context: AssetExecutionContext,
@@ -25,10 +49,13 @@ def create_dq_audit_entry(
     Returns MaterializeResult ready for the asset to return.
     """
     
-    # Extract monitoring results
-    files_complete = monitor_result.get("complete", False)
-    files_found = monitor_result.get("found_total", 0)
-    expected_count = monitor_result.get("expected_total", 0)
+    # AUTO-CONVERT monitor result format
+    standardized_result = standardize_monitor_result(monitor_result)
+    
+    # Extract monitoring results (now guaranteed to be in standard format)
+    files_complete = standardized_result.get("complete", False)
+    files_found = standardized_result.get("found_total", 0)
+    expected_count = standardized_result.get("expected_total", 0)
     
     context.log.info(f"🔍 {pipeline_name} DQ Audit Check:")
     context.log.info(f"   Files complete: {files_complete}")
@@ -48,17 +75,6 @@ def create_dq_audit_entry(
             }
         )
     
-    # Check file criteria for conditional logic (you can add your business logic here)
-    context.log.info(f"🔍 {pipeline_name} File Criteria:")
-    context.log.info(f"   - prefix: {prefix}")
-    context.log.info(f"   - suffix: {suffix}")
-    context.log.info(f"   - contains: {contains}")
-    context.log.info(f"   - not_contains: {not_contains}")
-    context.log.info(f"   - regex: {regex}")
-    context.log.info(f"   - extension: {extension}")
-    
-    # Here you can add conditional logic based on file criteria
-    # Example: Different audit logic for different prefixes
     if prefix:
         if isinstance(prefix, list):
             context.log.info(f"   Processing files with prefixes: {prefix}")

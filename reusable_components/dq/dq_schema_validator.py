@@ -17,8 +17,8 @@ def validate_all_file_schemas_with_result(
     folder_path: str,
     session: Session,
     context: AssetExecutionContext,
-    dq_result: Union[dict, str],
     pipeline_name: str,
+    dq_result: Optional[Union[dict, str]] = None,
     prefix: Optional[Union[str, List[str]]] = None,
     suffix: Optional[Union[str, List[str]]] = None,
     contains: Optional[Union[str, List[str]]] = None,
@@ -31,29 +31,27 @@ def validate_all_file_schemas_with_result(
     Returns MaterializeResult ready for the asset to return.
     """
     
-    dq_status = dq_result.get("status", "unknown")
-    
-    if dq_status != "completed":
-        context.log.info(f"❌ Skipping {pipeline_name} schema validation - DQ validation failed: {dq_status}")
+    if dq_result is not None:
+        dq_status = dq_result.get("status", "unknown")
         
-        return MaterializeResult(
-            value={
-                "status": "skipped",
-                "reason": f"DQ validation failed: {dq_status}",
-                "validation_passed": False,
-                "pipeline_name": pipeline_name
-            },
-            metadata={
-                "status": MetadataValue.text("⏭️ SKIPPED"),
-                "reason": MetadataValue.text("Previous step failed"),
-                "pipeline_name": MetadataValue.text(pipeline_name)
-            }
-        )
-    
-    context.log.info(f"🔍 {pipeline_name} starting schema validation")
-    context.log.info(f"   Container: {container}")
-    context.log.info(f"   Folder: {folder_path}")
-    context.log.info(f"   Criteria: prefix={prefix}, not_contains={not_contains}, extension={extension}")
+        if dq_status != "completed":
+            context.log.info(f"❌ Skipping {pipeline_name} schema validation - DQ validation failed: {dq_status}")
+            
+            return MaterializeResult(
+                value={
+                    "status": "skipped",
+                    "reason": f"DQ validation failed: {dq_status}",
+                    "validation_passed": False,
+                    "pipeline_name": pipeline_name
+                },
+                metadata={
+                    "status": MetadataValue.text("⏭️ SKIPPED"),
+                    "reason": MetadataValue.text("Previous step failed"),
+                    "pipeline_name": MetadataValue.text(pipeline_name)
+                }
+            )
+    else:
+        context.log.info(f"🔍 {pipeline_name} starting schema validation")
     
     try:
         # Use internal component to do the actual validation work

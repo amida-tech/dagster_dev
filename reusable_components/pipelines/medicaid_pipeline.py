@@ -11,8 +11,7 @@ from reusable_components.dq.control_table import load_dq_control_table_with_resu
 from reusable_components.etl.adls_csv_to_snowflake_iceberg import load_csv_to_iceberg_with_result
 from reusable_components.dq.dq_schema_validator import validate_all_file_schemas_with_result
 from reusable_components.dq.dq_procedure import dq_rules_procedure
-from reusable_components.etl.cleanup_files import cleanup_pipeline_directories
-from pipeline_config import RECIPIENT_CONFIG, PROVIDER_CONFIG, NPPES_CONFIG, NUCC_CONFIG
+from reusable_components.etl.cleanup_files import cleanup_pipeline_directories_with_result
 
 
 def create_pipeline(config: dict):
@@ -293,62 +292,57 @@ def create_pipeline(config: dict):
     
     # Rules Asset
     @asset(
-            name=f"execute_rules_asset_{subject_area}",
-            required_resource_keys={"snowflake_snowpark", "adls_access_keys"},
-            group_name=config["group_name"])
+        name=f"execute_rules_asset_{subject_area}",
+        required_resource_keys={"snowflake_snowpark", "adls_access_keys"},
+        ins={
+            "audit_batch_id": AssetIn(f"start_dq_audit_run_{subject_area}"),
+            "iceberg_result": AssetIn(f"load_csv_to_iceberg_{subject_area}")
+        },
+        group_name=config["group_name"]
+    )
     @with_pipeline_alerts(
         pipeline_name=config["pipeline_name"],
         alert_config=config["alert_config"]
     )
-    def execute_rules_asset(context):
-        """
-        Invokes the reusable components and returns the JSON output.
-        After successful DQ procedure, cleans up stage and load directories.
-        """
-
+    def execute_rules_asset(context: AssetExecutionContext, audit_batch_id: int, iceberg_result):
         dq_output = dq_rules_procedure(
             context=context,
+            audit_batch_id=audit_batch_id,
             session=context.resources.snowflake_snowpark,
-            rule_group=config["RULE_GROUP"],
-            rule_id=config["RULE_ID"],
-            refresh_summary=config["REFRESH_SUMMARY"],
+            rule_group=config.get("RULE_GROUP"),
+            rule_id=config.get("RULE_ID"),
+            refresh_summary=config.get("REFRESH_SUMMARY"),
             pipeline_name=config.get("pipeline_name"),
             alert_config=config.get("alert_config")
         )
         
-        # After successful DQ procedure, clean up all pipeline directories
-        try:
-            context.log.info("🧹 Starting cleanup after successful DQ procedure...")
-            
-            # Define directories to clean for all pipelines
-            directories_to_clean = [
-                {
-                    "pipeline_name": "Medicaid Recipient",
-                    "stage_directory": RECIPIENT_CONFIG["stage_directory"],
-                    "load_directory": RECIPIENT_CONFIG["load_directory"]
-                },
-                {
-                    "pipeline_name": "Medicaid Provider", 
-                    "stage_directory": PROVIDER_CONFIG["stage_directory"],
-                    "load_directory": PROVIDER_CONFIG["load_directory"]
-                }
-            ]
-            
-            # Clean up all directories
-            cleanup_result = cleanup_pipeline_directories(
-                context=context,
-                adls_client=context.resources.adls_access_keys,
-                container_name="srcfiles",
-                directories_to_clean=directories_to_clean
-            )
-            
-            context.log.info(f"✅ Cleanup completed successfully: {cleanup_result}")
-            
-        except Exception as e:
-            context.log.error(f"❌ Cleanup failed: {str(e)}")
-            # Don't fail the asset if cleanup fails, just log the error
-        
         return dq_output
+
+    # Cleanup Asset
+    @asset(
+    name=f"cleanup_{subject_area}_directories",
+    description=f"Clean up {subject_area} pipeline directories",
+    required_resource_keys={"adls_access_keys"},
+    ins={
+        "copy_result": AssetIn(f"copy_mftserver_{subject_area}_files_to_srcfiles_stage"), 
+        "unzip_result": AssetIn(f"unzip_{subject_area}_files_to_load"),
+        "transactions_result": AssetIn(f"load_dq_transactions_{subject_area}"),
+        "archive_result": AssetIn(f"archive_{subject_area}_files"),
+        "iceberg_result": AssetIn(f"load_csv_to_iceberg_{subject_area}"),
+        "dq_result": AssetIn(f"execute_rules_asset_{subject_area}")
+    },
+    group_name=config["group_name"]
+    )
+    @with_pipeline_alerts(
+        pipeline_name=config["pipeline_name"],
+        alert_config=config["alert_config"]
+    )
+    def cleanup_directories(context: AssetExecutionContext, **upstream_results) -> MaterializeResult:
+        return cleanup_pipeline_directories_with_result(
+            context=context,
+            adls_client=context.resources.adls_access_keys,
+            config=config
+        )
 
     return {
         "monitor_asset": monitor_asset,
@@ -362,6 +356,6 @@ def create_pipeline(config: dict):
         "dq_row_count_validation": dq_row_count_validation,
         "dq_schema_check": dq_schema_check,
         "load_csv_to_iceberg": load_csv_to_iceberg,
-        "execute_rules_asset": execute_rules_asset
-
+        "execute_rules_asset": execute_rules_asset,
+        "cleanup_directories": cleanup_directories
     }

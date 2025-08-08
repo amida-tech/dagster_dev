@@ -7,11 +7,12 @@ from azure.storage.filedatalake import DataLakeServiceClient
 def archive_files_with_result(
     context: AssetExecutionContext,
     adls_client: DataLakeServiceClient,
-    copy_result: dict,
     stage_container: str,
     stage_directory: str,
     archive_directory: str,
     pipeline_name: str,
+    copy_result: Optional[dict] = None,     
+    monitor_result: Optional[dict] = None,  
     prefix: Optional[Union[str, List[str]]] = None,
     suffix: Optional[Union[str, List[str]]] = None,
     contains: Optional[Union[str, List[str]]] = None,
@@ -21,25 +22,52 @@ def archive_files_with_result(
 ) -> MaterializeResult:
     """
     Complete archive logic: validation + file archiving + MaterializeResult.
+    - If copy_result provided: validates copy operation first (Medicaid flow - archives ZIP files)
+    - If monitor_result provided: validates monitor status first (NPPES flow - archives CSV files)
     Returns MaterializeResult ready for the asset to return.
     """
     
-    copy_status = copy_result.get("status", "unknown")
-    
-    if copy_status != "completed":
-        context.log.info(f"❌ Skipping {pipeline_name} archive - copy status: {copy_status}")
+    if copy_result is not None:
+        copy_status = copy_result.get("status", "unknown")
         
-        return MaterializeResult(
-            value={"status": "skipped", "files_archived": 0, "pipeline_name": pipeline_name},
-            metadata={
-                "status": MetadataValue.text("⏭️ SKIPPED"),
-                "reason": MetadataValue.text(f"Copy status: {copy_status}"),
-                "pipeline_name": MetadataValue.text(pipeline_name)
-            }
-        )
+        context.log.info(f"📦 {pipeline_name} Copy Validation for Archive:")
+        context.log.info(f"   Copy status: {copy_status}")
+        
+        if copy_status != "completed":
+            context.log.info(f"❌ Skipping {pipeline_name} archive - copy status: {copy_status}")
+            
+            return MaterializeResult(
+                value={"status": "skipped", "files_archived": 0, "pipeline_name": pipeline_name},
+                metadata={
+                    "status": MetadataValue.text("⏭️ SKIPPED"),
+                    "reason": MetadataValue.text(f"Copy status: {copy_status}"),
+                    "pipeline_name": MetadataValue.text(pipeline_name)
+                }
+            )
+    
+    elif monitor_result is not None:
+        monitor_status = monitor_result.get("status", "unknown")
+        file_ready = monitor_result.get("file_ready", False)
+        
+        context.log.info(f"📦 {pipeline_name} Monitor Validation for Archive:")
+        context.log.info(f"   Monitor status: {monitor_status}, File ready: {file_ready}")
+        
+        if monitor_status != "success" or not file_ready:
+            context.log.info(f"❌ Skipping {pipeline_name} archive - files not ready")
+            
+            return MaterializeResult(
+                value={"status": "skipped", "files_archived": 0, "pipeline_name": pipeline_name},
+                metadata={
+                    "status": MetadataValue.text("⏭️ SKIPPED"),
+                    "reason": MetadataValue.text("Files not ready for archiving"),
+                    "pipeline_name": MetadataValue.text(pipeline_name)
+                }
+            )
+    
+    else:
+        context.log.info(f"📦 {pipeline_name} - No upstream validation required for archive")
     
     try:
-        # Perform the actual archiving
         result = _archive_files_internal(
             context=context,
             adls_client=adls_client,

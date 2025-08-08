@@ -12,11 +12,12 @@ from azure.core.exceptions import ServiceRequestError, HttpResponseError
 def unzip_files_with_result(
     context: AssetExecutionContext,
     adls_client: DataLakeServiceClient,
-    copy_result: dict,
     container_name: str,
     stage_directory: str,
     load_directory: str,
     pipeline_name: str,
+    copy_result: Optional[dict] = None,      
+    monitor_result: Optional[dict] = None,  
     prefix: Optional[Union[str, List[str]]] = None,
     suffix: Optional[Union[str, List[str]]] = None,
     contains: Optional[Union[str, List[str]]] = None,
@@ -25,32 +26,54 @@ def unzip_files_with_result(
     extension: Optional[Union[str, List[str]]] = None
 ) -> MaterializeResult:
     """
-    Complete unzip/copy logic: handles both ZIP files and CSV files.
-    - ZIP files: extracts and cleans filenames
-    - CSV files: copies and cleans filenames
-    Returns MaterializeResult ready for the asset to return.
+    Complete file processing logic: handles both ZIP extraction and CSV copying.
+    - If copy_result provided: validates copy operation first (Medicaid flow)
+    - If monitor_result provided: validates monitor status first (NPPES flow)
+    - Automatically detects and processes ZIP files (extract) or CSV files (copy)
     """
-    
-    copy_status = copy_result.get("status", "unknown")
-    copy_count = copy_result.get("copy_count", 0)
-    
-    context.log.info(f"📂 {pipeline_name} File Processing Check:")
-    context.log.info(f"   Copy status: {copy_status}, Files: {copy_count}")
-    
-    # Check if copy was successful
-    if copy_status != "completed":
-        context.log.info(f"❌ Skipping {pipeline_name} file processing - copy not completed")
+
+    if copy_result is not None:
+        copy_status = copy_result.get("status", "unknown")
+        copy_count = copy_result.get("copy_count", 0)
         
-        return MaterializeResult(
-            value={"status": "skipped", "reason": "Copy operation failed", "pipeline_name": pipeline_name},
-            metadata={
-                "status": MetadataValue.text("⏭️ SKIPPED"),
-                "reason": MetadataValue.text("Copy operation failed"),
-                "pipeline_name": MetadataValue.text(pipeline_name)
-            }
-        )
+        context.log.info(f"📂 {pipeline_name} Copy Validation:")
+        context.log.info(f"   Copy status: {copy_status}, Files: {copy_count}")
+        
+        if copy_status != "completed":
+            context.log.info(f"❌ Skipping {pipeline_name} file processing - copy not completed")
+            return MaterializeResult(
+                value={"status": "skipped", "reason": "Copy operation failed", "pipeline_name": pipeline_name},
+                metadata={
+                    "status": MetadataValue.text("⏭️ SKIPPED"),
+                    "reason": MetadataValue.text("Copy operation failed"),
+                    "pipeline_name": MetadataValue.text(pipeline_name)
+                }
+            )
     
-    context.log.info(f"✅ {pipeline_name} starting file processing: {copy_count} files to process")
+    elif monitor_result is not None:
+        # NPPES flow - validate monitor result
+        monitor_status = monitor_result.get("status", "unknown")
+        file_ready = monitor_result.get("file_ready", False)
+        
+        context.log.info(f"📂 {pipeline_name} Monitor Validation:")
+        context.log.info(f"   Monitor status: {monitor_status}, File ready: {file_ready}")
+        
+        if monitor_status != "success" or not file_ready:
+            context.log.info(f"❌ Skipping {pipeline_name} file processing - files not ready")
+            return MaterializeResult(
+                value={"status": "skipped", "reason": "Files not ready", "pipeline_name": pipeline_name},
+                metadata={
+                    "status": MetadataValue.text("⏭️ SKIPPED"),
+                    "reason": MetadataValue.text("Files not ready for processing"),
+                    "pipeline_name": MetadataValue.text(pipeline_name)
+                }
+            )
+    
+    else:
+        # No upstream validation needed
+        context.log.info(f"📂 {pipeline_name} - No upstream validation required")
+    
+    context.log.info(f"✅ {pipeline_name} starting file processing")
     
     # Use retry logic for the entire operation
     max_retries = 3
@@ -129,7 +152,7 @@ def unzip_files_with_result(
     )
 
 def _remove_timestamp_from_filename(filename):
-    """Remove only timestamp/date numbers from filenames, preserving meaningful identifiers like TB, TBL"""
+    """Remove timestamp/date numbers and numeric suffixes from filenames, preserving meaningful identifiers like TB, TBL"""
     name, ext = os.path.splitext(filename)
     
     # Specific approach: find TB/TBL and preserve everything before the timestamp part
@@ -155,6 +178,7 @@ def _remove_timestamp_from_filename(filename):
     
     # If no TB/TBL patterns matched, use general timestamp removal patterns
     general_patterns = [
+        r'_\d{8}-\d{8}.*',                       # _20050523-20250713 
         r'_\d{4}_\d{2}_\d{2}T\d{6}Z?.*',        # _2025_07_18T094424Z...
         r'_\d{4}_\d{2}_\d{2}_\d{4,6}.*',        # _2025_07_08_143000...
         r'_\d{4}-\d{2}-\d{2}T\d{6}Z?.*',        # _2024-07-08T143000Z...
@@ -167,6 +191,7 @@ def _remove_timestamp_from_filename(filename):
         r'T\d{6}Z?.*',                           # T094424Z...
         r'_\d{4}_\d{2}_\d{2}.*',                 # _2025_07_18...
         r'_\d{8}.*',                             # _20250718...
+        r'_\d{1,4}$',                            # _251, _1, _1234 
     ]
     
     for pattern in general_patterns:

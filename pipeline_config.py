@@ -34,7 +34,9 @@ RECIPIENT_CONFIG = {
         "load_dq_control_table_recipient",
         "dq_recipient_row_count_validation",
         "dq_schema_check_recipient",
-        "load_csv_to_iceberg_recipient"  
+        "load_csv_to_iceberg_recipient",
+        "execute_rules_asset_recipient",
+        "cleanup_recipient_directories"  
     ],
     "stage_directory": "medicaid/recipient/stage",
     "load_directory": "medicaid/recipient/load", 
@@ -71,7 +73,9 @@ PROVIDER_CONFIG = {
         "load_dq_control_table_provider",
         "dq_provider_row_count_validation",
         "dq_schema_check_provider",
-        "load_csv_to_iceberg_provider"
+        "load_csv_to_iceberg_provider",
+        "execute_rules_asset_provider",
+        "cleanup_provider_directories"
     ],
     "stage_directory": "medicaid/provider/stage",
     "load_directory": "medicaid/provider/load",
@@ -100,6 +104,14 @@ NPPES_CONFIG = {
         "regex": {"pattern": None, "count": 0},
         "extension": {"pattern": [".csv"], "count": 1}
     },
+    "file_name": "",
+    "column_mapping_file_name": "npi_column_mapping.sql",
+    "column_mapping_file_path": "./medicaid/npi/sql/bronze/npi_column_mapping.sql",
+    "sql_files_path": "./medicaid/npi/sql/silver/",
+    "gold_db": "ANALYTYXONE_DEV",
+    "gold_schema": "GOLD",
+    "silver_db": "ANALYTYXONE_DEV",
+    "silver_schema": "SILVER",  
     "RULE_GROUP": "RECIP_001",
     "RULE_ID": None,
     "REFRESH_SUMMARY": None,
@@ -110,7 +122,10 @@ NPPES_CONFIG = {
         "archive_nppes_files",
         "dq_schema_check_nppes",
         "load_csv_to_iceberg_nppes",
-        "execute_rules_asset_nppes"
+        "transform_bronze_to_silver_nppes",
+        "transform_silver_to_gold_nppes"
+        "execute_rules_asset_nppes",
+        "cleanup_nppes_directories"
     ],
     "stage_directory": "nppes/stage",
     "load_directory": "nppes/load",  
@@ -130,7 +145,7 @@ NUCC_CONFIG = {
     "subject_area": "NUCC",
     "asset_name": "nucc_files_monitor",
     "source_type": "nucc",
-    
+    "sftp_source_path": "/prod/mmis/nucc",
     "file_criteria": {
         "prefix": {"pattern": ["nucc_taxonomy"], "count": 1},
         "suffix": {"pattern": None, "count": 0},
@@ -139,6 +154,17 @@ NUCC_CONFIG = {
         "regex": {"pattern": None, "count": 0},
         "extension": {"pattern": [".csv"], "count": 1}
     },
+    "file_name": "",
+    "column_mapping_file_name": "nucc_column_mapping.sql",
+    "column_mapping_file_path": "./medicaid/nucc/sql/bronze/nucc_column_mapping.sql",
+    "sql_files_path": "./medicaid/nucc/sql/silver/",
+    "bronze_table": "NUCC_TAXONOMY",
+    "silver_table": "NUCC_TAXONOMY",
+    "gold_table": "NUCC_TAXONOMY",
+    "gold_db": "ANALYTYXONE_DEV",
+    "gold_schema": "GOLD",
+    "silver_db": "ANALYTYXONE_DEV",
+    "silver_schema": "SILVER",  
     "RULE_GROUP": "RECIP_001",
     "RULE_ID": None,
     "REFRESH_SUMMARY": None,
@@ -149,13 +175,16 @@ NUCC_CONFIG = {
         "archive_nucc_files",
         "dq_schema_check_nucc",
         "load_csv_to_iceberg_nucc",
-        "execute_rules_asset_nucc"
+        "transform_bronze_to_silver_nppes",
+        "transform_silver_to_gold_nppes",
+        "execute_rules_asset_nucc",
+        "cleanup_nucc_directories"
     ],
     "stage_directory": "nucc/stage",
     "load_directory": "nucc/load",  
     "archive_directory": "nucc/archive",
     "control_file": "", 
-    "group_name": "nucc_processing",
+    "group_name": "nucc_file_processing",
     "alert_config": {
         "program_name": "NUCC Data Processing",
         "send_success_alerts": True

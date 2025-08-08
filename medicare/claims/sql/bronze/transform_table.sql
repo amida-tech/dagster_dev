@@ -1,0 +1,15 @@
+CREATE OR REPLACE TABLE {{target_table}} AS
+SELECT 
+    STATE,
+    COFFEE_SHOP,
+    RATING,
+    CASE 
+        WHEN RATING >= 4.0 THEN 'Excellent'
+        WHEN RATING >= 3.0 THEN 'Good'
+        WHEN RATING >= 2.0 THEN 'Fair'
+        ELSE 'Poor'
+    END AS RATING_CATEGORY,
+    CURRENT_TIMESTAMP() AS PROCESSED_AT
+FROM {{source_table}}
+WHERE RATING IS NOT NULL
+  AND STATE IS NOT NULL;
