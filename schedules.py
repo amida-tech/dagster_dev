@@ -47,7 +47,7 @@ def nppes_morning_schedule(context: ScheduleEvaluationContext):
 # NUCC Pipeline Schedule
 @schedule(
     job_name="nucc_pipeline_job",
-    cron_schedule="0 4 * * *",  # Every day at 4:00 AM
+    cron_schedule="0 8 * * *",  # Every day at 4:00 AM
     default_status=DefaultScheduleStatus.RUNNING,
     description="Runs NUCC pipeline every morning at 4 AM, but only if files are found"
 )
@@ -87,7 +87,7 @@ def nucc_morning_schedule(context: ScheduleEvaluationContext):
 # Provider Pipeline Schedule
 @schedule(
     job_name="provider_pipeline_job",
-    cron_schedule="0 4 * * *",  # Every day at 4:00 AM
+    cron_schedule="0 8 * * *",  # Every day at 4:00 AM
     default_status=DefaultScheduleStatus.RUNNING,
     description="Runs Medicaid Provider pipeline every morning at 4 AM, but only if files are found"
 )
@@ -127,7 +127,7 @@ def provider_morning_schedule(context: ScheduleEvaluationContext):
 # Recipient Pipeline Schedule
 @schedule(
     job_name="recipient_pipeline_job",
-    cron_schedule="0 4 * * *", 
+    cron_schedule="0 8 * * *", 
     default_status=DefaultScheduleStatus.RUNNING,
     description="Runs Medicaid Recipient pipeline every morning at 4 AM, but only if files are found"
 )
@@ -163,4 +163,3 @@ def recipient_morning_schedule(context: ScheduleEvaluationContext):
     except Exception as e:
         context.log.error(f"RECIPIENT: Error checking files: {e}")
         return SkipReason(f"RECIPIENT: Error checking files: {e}")
-
